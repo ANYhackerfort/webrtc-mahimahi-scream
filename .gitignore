@@ -1,0 +1,26 @@
+.chromium/
+.runtime/
+media/*.y4m
+__pycache__/
+output/
+tests/
+
+# Editor settings and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Python bytecode, environments, and tool caches
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example

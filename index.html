@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebRTC video test</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <h1 id="title"></h1>
+  <p class="hint">Video: sender → receiver. Feedback returns in the other direction.</p>
+  <video id="video" autoplay playsinline muted></video>
+  <button id="start" disabled>Start</button>
+  <button id="stop" disabled>Stop</button>
+  <p id="status" role="status">Connecting…</p>
+
+  <section>
+    <h2>Mahimahi</h2>
+    <p id="linkDelay" class="hint">Waiting for link statistics…</p>
+    <table>
+      <thead><tr><th>Direction</th><th>Queued packets</th><th>Queue wait</th><th>ECN marks</th><th>Drops</th></tr></thead>
+      <tbody>
+        <tr><th>Sender → receiver</th><td id="uplinkQueue">—</td><td id="uplinkDelay">—</td><td id="uplinkMarks">—</td><td id="uplinkDrops">—</td></tr>
+        <tr><th>Receiver → sender</th><td id="downlinkQueue">—</td><td id="downlinkDelay">—</td><td id="downlinkMarks">—</td><td id="downlinkDrops">—</td></tr>
+      </tbody>
+    </table>
+    <p class="hint">Queue wait is the oldest packet’s waiting time across the two DualPI2 subqueues, not an average. It excludes the configured link delay.</p>
+  </section>
+  <section>
+    <div id="bitrateGraph"></div>
+  </section>
+  <section>
+    <h2>Sender · video sent</h2>
+    <div class="stats">
+      <div>Rate<strong id="sent">0 B/s</strong></div>
+      <div>Packets<strong id="senderPackets">—</strong></div>
+      <div>RTT<strong id="senderRtt">—</strong></div>
+    </div>
+  </section>
+  <section>
+    <h2>Receiver · video received</h2>
+    <div class="stats">
+      <div>Rate<strong id="received">0 B/s</strong></div>
+      <div>Packets<strong id="receiverPackets">—</strong></div>
+      <div>Congestion-marked<strong id="ceMarked">—</strong></div>
+      <div>Unmarked<strong id="ceUnmarked">—</strong></div>
+      <div>RTP loss estimate<strong id="rtpLost">—</strong></div>
+    </div>
+    <div id="congestionGraph"></div>
+  </section>
+</body>
+</html>
