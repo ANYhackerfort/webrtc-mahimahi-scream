@@ -13,7 +13,7 @@ const ui = Object.fromEntries(
     'ceMarked', 'ceUnmarked', 'rtpLost', 'senderPackets',
     'senderRtt', 'receiverPackets', 'uplinkMarks', 'downlinkMarks',
     'uplinkDrops', 'downlinkDrops', 'uplinkQueue', 'downlinkQueue',
-    'uplinkDelay', 'downlinkDelay', 'linkDelay'].map(
+    'uplinkDelay', 'downlinkDelay', 'linkDelay', 'queueDepthLabel', 'queueDelayLabel', 'queueHint'].map(
     id => [id, document.getElementById(id)],
   ),
 );
@@ -74,18 +74,27 @@ function showExperimentStats(sample) {
   ui.rtpLost.textContent = displayCount(receiver?.rtpPacketsLost);
   congestionGraph.update(receiver);
   bitrateGraph.update({ sender, receiver });
+  const fifo = network?.configuration?.queue === 'droptail';
+  ui.queueDepthLabel.textContent = fifo ? 'Outstanding packets' : 'Queued packets';
+  ui.queueDelayLabel.textContent = fifo ? 'Last packet delay' : 'Queue wait';
+  ui.queueHint.textContent = fifo
+    ? 'FIFO: outstanding includes a packet in service; delay is the last delivered packet’s queueing + serialization time. No ECN marking. Fixed link delay is excluded.'
+    : 'Queue wait is the oldest packet’s waiting time across the two DualPI2 subqueues, not an average. It excludes the configured link delay.';
 
   for (const direction of ['uplink', 'downlink']) {
     const queue = network?.queues?.find(queue => queue.direction === direction);
     ui[`${direction}Marks`].textContent = displayCount(queue?.ecn_mark);
     ui[`${direction}Drops`].textContent = displayCount(queue?.drop);
-    ui[`${direction}Queue`].textContent = displayCount(queue?.q_pkts);
+    ui[`${direction}Queue`].textContent = displayCount(fifo ? queue?.outstanding_pkts : queue?.q_pkts);
     const waits = [queue?.qdelay_l_ms, queue?.qdelay_c_ms];
-    ui[`${direction}Delay`].textContent = waits.every(Number.isFinite)
-      ? `${Math.max(...waits).toFixed(1)} ms` : '—';
+    const delay = fifo ? queue?.last_sojourn_ms : waits.every(Number.isFinite) ? Math.max(...waits) : null;
+    ui[`${direction}Delay`].textContent = Number.isFinite(delay) ? `${delay.toFixed(1)} ms` : '—';
   }
   const delay = network?.configuration?.delay_ms_each_way;
-  ui.linkDelay.textContent = delay == null ? 'Mahimahi disabled' : `${delay} ms delay each way`;
+  const queueName = fifo ? 'FIFO (droptail)' : 'DualPI2';
+  const limit = network?.configuration?.queue_packets;
+  ui.linkDelay.textContent = delay == null ? 'Waiting for link statistics…'
+    : `${queueName} · ${limit ?? 'default'}-packet limit · ${delay} ms delay each way`;
 }
 
 async function refreshStats() {

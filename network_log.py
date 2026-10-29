@@ -25,6 +25,7 @@ class NetworkLog:
         self.stop = threading.Event()
         self.pending = {}
         self.queues = {}
+        self.packet_logs = {}
         self.last_snapshot = 0
         self.error = None
         self.write_snapshot()
@@ -54,8 +55,11 @@ class NetworkLog:
         self.queues[pid] = sample
 
     def write_snapshot(self):
+        if self.configuration.get('queue') == 'droptail':
+            self.read_fifo_logs()
         for pid, sample in self.queues.items():
-            sample['direction'] = self.queue_direction(pid)
+            if isinstance(pid, int):
+                sample['direction'] = self.queue_direction(pid)
         queues = list(self.queues.values())
         temporary = self.runtime / 'network-stats.tmp'
         snapshot = {
@@ -70,6 +74,55 @@ class NetworkLog:
         with self.output_path.open('a') as output:
             output.write(json.dumps(snapshot) + '\n')
         self.last_snapshot = time.monotonic()
+
+    def read_fifo_logs(self):
+        """FIFO drops happen at enqueue, so +/-/d events account for all packets.
+
+        Outstanding includes the packet currently being serialized. Departure
+        delay includes queueing and serialization; it is not a current HOL age.
+        """
+        for direction in ['uplink', 'downlink']:
+            path = self.runtime / f'{direction}.log'
+            if not path.exists():
+                continue
+            state = self.packet_logs.setdefault(direction, {
+                'position': 0, 'pending': '', 'arrived': 0, 'departed': 0,
+                'arrived_bytes': 0, 'departed_bytes': 0, 'drop': 0,
+                'dropped_bytes': 0, 'last_sojourn_ms': None, 't_ms': 0,
+            })
+            with path.open() as source:
+                source.seek(state['position'])
+                text = state['pending'] + source.read()
+                state['position'] = source.tell()
+            lines = text.split('\n')
+            state['pending'] = lines.pop()
+            for line in lines:
+                fields = line.split()
+                if len(fields) < 3 or not fields[0].isdigit():
+                    continue
+                state['t_ms'] = int(fields[0])
+                event, size = fields[1], int(fields[2])
+                if event == '+':
+                    state['arrived'] += 1
+                    state['arrived_bytes'] += size
+                elif event == '-':
+                    state['departed'] += 1
+                    state['departed_bytes'] += size
+                    if len(fields) > 3:
+                        state['last_sojourn_ms'] = float(fields[3])
+                elif event == 'd':
+                    state['drop'] += size
+                    state['dropped_bytes'] += int(fields[3])
+            self.queues[direction] = {
+                'unix_time_ms': round(time.time() * 1000), 'direction': direction,
+                't_ms': state['t_ms'],
+                'outstanding_pkts': state['arrived'] - state['departed'] - state['drop'],
+                'outstanding_bytes': state['arrived_bytes'] - state['departed_bytes'] - state['dropped_bytes'],
+                'arrived_packets': state['arrived'], 'departed_packets': state['departed'],
+                'last_sojourn_ms': state['last_sojourn_ms'],
+                'drop': state['drop'], 'ecn_mark': 0,
+                'source': 'fifo_packet_log',
+            }
 
     def run(self):
         try:

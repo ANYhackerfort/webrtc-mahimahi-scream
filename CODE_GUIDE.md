@@ -18,7 +18,7 @@ browsers through Mahimahi, not through this server.
 Mahimahi-only launcher: starts the emulator, both browsers, and the server,
 then stops its processes on exit. Every function below supports this run.
 
-- `main()`: reads `--trace`, `--delay-ms`, `--video`, and `--output-dir`.
+- `main()`: reads `--trace`, `--queue`, `--queue-packets`, `--delay-ms`, `--video`, and `--output-dir`.
 - `run_mahimahi_test()`: starts Mahimahi's bandwidth/delay emulation, queue logger, server, and receiver. It always uses Mahimahi.
 - `run_inside_mahimahi()`: runs inside the emulator, records its addresses, then launches the sender.
 - `browser_command()`: builds Chromium arguments, including SCReAM/RFC 8888 settings, Y4M input, and separate browser profiles.

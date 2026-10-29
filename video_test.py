@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch a one-way Y4M WebRTC test across a Mahimahi DualPI2 link."""
+"""Launch a one-way Y4M WebRTC test across Mahimahi with DualPI2 or FIFO."""
 
 import argparse
 import json
@@ -179,22 +179,35 @@ def run_mahimahi_test(args):
     network_log = None
     try:
         trace = find_trace(args.trace)
+        queue = 'droptail' if args.queue in ['fifo', 'droptail'] else 'dualPI2'
+        queue_arguments = f'packets={args.queue_packets}'
         address_file = runtime / 'addresses.json'
         address_file.unlink(missing_ok=True)
         configuration = {
-            'trace': str(trace), 'queue': 'dualPI2',
+            'trace': str(trace), 'queue': queue,
+            'queue_packets': args.queue_packets,
             'delay_ms_each_way': args.delay_ms,
             'media_direction': 'sender_to_receiver',
             'independent_capacity_each_way': True,
         }
+        for direction in ['uplink', 'downlink']:
+            (runtime / f'{direction}.log').unlink(missing_ok=True)
         network_log = NetworkLog(runtime, output_directory / 'mahimahi.jsonl', configuration)
         command = [
             'mm-link', str(trace), str(trace),
-            '--uplink-queue=dualPI2', '--downlink-queue=dualPI2',
+            f'--uplink-queue={queue}', f'--downlink-queue={queue}',
+            f'--uplink-queue-args={queue_arguments}', f'--downlink-queue-args={queue_arguments}',
+        ]
+        if queue == 'droptail':
+            command.extend([
+                f'--uplink-log={runtime / "uplink.log"}',
+                f'--downlink-log={runtime / "downlink.log"}',
+            ])
+        command.extend([
             '--',
             sys.executable, str(Path(__file__).resolve()),
             '--inside', '--video', str(video),
-        ]
+        ])
         # mm-delay delays packets in both directions across its namespace.
         if args.delay_ms:
             command = ['mm-delay', str(args.delay_ms), *command]
@@ -204,7 +217,7 @@ def run_mahimahi_test(args):
         host, sender_address = addresses['host'], addresses['sender']
         print(f'Trace: {trace}', flush=True)
         (runtime / 'run.json').write_text(json.dumps({
-            'trace': str(trace), 'queue': 'dualPI2',
+            'trace': str(trace), 'queue': queue, 'queue_packets': args.queue_packets,
             'delay_ms_each_way': args.delay_ms,
             'added_rtt_ms': 2 * args.delay_ms,
             'started_unix_time_ms': round(time.time() * 1000),
@@ -225,7 +238,7 @@ def run_mahimahi_test(args):
             'receiver', host, video, runtime, host,
         ), 'receiver.log')
 
-        print(f'Sender {sender_address} -> Mahimahi DualPI2 -> receiver {host}')
+        print(f'Sender {sender_address} -> Mahimahi {queue} ({args.queue_packets} packets) -> receiver {host}')
         print(f'Added delay: {args.delay_ms} ms each way (~{2 * args.delay_ms} ms RTT)')
         print(f'Stats: {output_directory}\nClick Start in either browser. Ctrl+C closes the test.', flush=True)
         processes.wait(network_log)
@@ -239,12 +252,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--video', help='Y4M file; defaults to a generated test pattern')
     parser.add_argument('--trace', default=os.environ.get('TRACE_FILE'), help='Mahimahi trace (default: fixed 1 Mbps)')
+    parser.add_argument('--queue', choices=['dualpi2', 'fifo', 'droptail'], default='dualpi2', help='Queue in both directions (fifo = droptail; default: dualpi2)')
+    parser.add_argument('--queue-packets', type=int, default=100, help='Packet limit per direction for either queue (default: 100)')
     parser.add_argument('--delay-ms', type=int, default=25, help='Added delay in each direction (default: 25 ms)')
     parser.add_argument('--output-dir', default=str(ROOT / 'output'), help='Directory for the three statistics files')
     parser.add_argument('--inside', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.delay_ms < 0:
         parser.error('--delay-ms must be nonnegative')
+    if args.queue_packets < 1:
+        parser.error('--queue-packets must be positive')
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
         if args.inside:
