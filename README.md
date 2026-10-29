@@ -6,6 +6,14 @@ Download Chromium (SCReAM is enabled by the test launcher):
 ./download-chromium-scream.sh
 ```
 
+Optional source checkout (no build; destination defaults to `.chromium-source/`):
+
+```bash
+./download-chromium-source.sh
+# Or use another drive:
+./download-chromium-source.sh /path/on/another/drive/chromium-source
+```
+
 Run with the **1 Mbps trace, 25 ms delay each way**. Click **Start/Stop**:
 
 ```bash
